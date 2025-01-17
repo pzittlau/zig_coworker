@@ -1,2 +1,2 @@
-# zig_coroutines
+# zig_coworker
 Symmetric Coroutines for Zig
