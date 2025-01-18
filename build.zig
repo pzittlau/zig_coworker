@@ -13,6 +13,7 @@ pub fn build(b: *std.Build) void {
     const lib = b.addStaticLibrary(.{
         .name = "zig_coworkers",
         .root_module = lib_mod,
+        .optimize = optimize,
     });
     b.installArtifact(lib);
 
@@ -23,4 +24,27 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
+
+    const docs_install = b.addInstallDirectory(.{
+        .source_dir = lib.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+
+    const docs_install_step = b.step("install_docs", "Install docs into zig-out/docs");
+    docs_install_step.dependOn(&docs_install.step);
+
+    const docs_show = b.addSystemCommand(&.{
+        "python3",
+        "-m",
+        "http.server",
+        "-b",
+        "127.0.0.1",
+        "8000",
+        "-d",
+        "zig-out/docs/",
+    });
+    const docs_show_step = b.step("show_docs", "Open an http server that serves the docs");
+    docs_show_step.dependOn(&docs_install.step);
+    docs_show_step.dependOn(&docs_show.step);
 }

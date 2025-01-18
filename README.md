@@ -1,16 +1,16 @@
 # Zig CoWorker
 
 This project provides a simple implementation of symmetric, cooperative, stackful coroutines in Zig,
-without relying on a central scheduler. It allows you to create multiple execution contexts 
-(CoWorkers) that can explicitly switch control between each other. This approach is useful for 
-concurrent programming where you want fine-grained control over when and how execution switches 
+without relying on a central scheduler. It allows you to create multiple execution contexts
+(CoWorkers) that can explicitly switch control between each other. This approach is useful for
+concurrent programming where you want fine-grained control over when and how execution switches
 occur.
 
 **Key Features:**
 
 *   **Symmetric Coroutines:** Any coroutine can transfer control to any other coroutine.
 *   **Cooperative Multitasking:** Coroutines explicitly yield control, preventing preemption.
-*   **Stackful Coroutines:** Each coroutine has its own stack, allowing it to execute arbitrary 
+*   **Stackful Coroutines:** Each coroutine has its own stack, allowing it to execute arbitrary
     code, including function calls.
 *   **No Scheduler:** Switching coroutines is done explicitly by calling a `switchTo` function.
 
@@ -62,13 +62,13 @@ pub fn main() !void {
 ```
 
 In this example, testCoWorkerA and testCoWorkerB are two separate coroutines. They repeatedly print
-a message and then switch control to the other coroutine. The main function initializes the 
+a message and then switch control to the other coroutine. The main function initializes the
 coroutines and starts the execution by switching to testCoWorkerA.
 
 How to Use:
 
 - Include `CoWorker.zig` in your Zig project.
-- Create `CoWorker` instances using `CoWorker.init` (allocating a new stack) or 
+- Create `CoWorker` instances using `CoWorker.init` (allocating a new stack) or
   `CoWorker.initFromStack` (using a provided stack).
 - Use the `switchTo` method to transfer control to another `CoWorker`.
 - Remember that `CoWorker`s must explicitly yield control; there is no automatic scheduling.
