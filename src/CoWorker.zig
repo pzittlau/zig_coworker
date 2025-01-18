@@ -1,11 +1,18 @@
+//! This module provides an implementation for stackful, symmetric, cooperative coroutines.
+//!
+//! These coroutines, or "CoWorkers", allow for manual switching of execution contexts without
+//! relying on a central scheduler. This can be useful for scenarios requiring fine-grained control
+//! over concurrency.
+
 const std = @import("std");
-const builtin = @import("builtin");
 
 threadlocal var thread_state: ThreadState = .{};
 
-pub const StackPtr = [*]u8;
+const StackPtr = [*]u8;
 
-const CoWorkerError = error{
+/// Represents errors that can occur during CoWorker operations.
+pub const CoWorkerError = error{
+    /// Indicates that the provided stack was too small to initialize a CoWorker.
     StackOverflow,
 };
 
@@ -44,6 +51,10 @@ const ThreadState = struct {
     },
     coworker_current: ?*CoWorker = null,
 
+    /// Switches execution from the current CoWorker to the provided CoWorker.
+    ///
+    /// This function saves the current stack pointer and restores the stack pointer of the target
+    /// CoWorker, effectively transferring control.
     fn switchTo(self: *@This(), to: *CoWorker) void {
         const from = self.current();
         if (from == to) return;
@@ -51,19 +62,33 @@ const ThreadState = struct {
         swap_stacks(&from.stack_ptr, &to.stack_ptr);
     }
 
+    /// Returns a pointer to the currently executing CoWorker.
+    ///
+    /// If no CoWorker is currently active (i.e., at the start of the program), it returns a pointer
+    /// to the root CoWorker, which represents the initial execution context.
     fn current(self: *@This()) *CoWorker {
         return self.coworker_current orelse &self.coworker_root;
     }
 
+    /// Returns true if the current execution is within a CoWorker (not the root).
     fn inCoWorker(self: *@This()) bool {
         return self.current() != &self.coworker_root;
     }
 };
 
-const CoWorker = struct {
+/// Represents a cooperative worker with its own stack.
+///
+/// CoWorkers allow for concurrent execution by explicitly switching control between them. They are
+/// stackful, meaning each CoWorker has its own call stack.
+/// The CoWorker struct itself is also placed on the provided stack.
+pub const CoWorker = struct {
+    /// The function that this CoWorker will execute.
     func: *const fn () void,
+    /// The memory allocated for this CoWorker's stack.
     stack: []u8,
+    /// Indicates whether this CoWorker owns the allocated stack memory.
     owns_stack: bool = false,
+    /// The current stack pointer for this CoWorker.
     stack_ptr: StackPtr,
 
     const alignment = 16; // 16 byte aligned per x86-64 ABI
@@ -71,12 +96,23 @@ const CoWorker = struct {
     const jump_offset = 6 * @sizeOf(usize);
     const Trampoline = @TypeOf(&trampoline);
 
+    /// Initializes a new CoWorker with a newly allocated stack.
+    ///
+    /// The `allocator` is used to allocate the stack memory. The `stack_size` specifies the size
+    /// of the stack in bytes. The `func` is the function that the CoWorker will execute when it's
+    /// switched to.
+    /// The CoWorker struct itself is also placed on the provided stack.
     pub fn init(allocator: std.mem.Allocator, stack_size: u64, func: *const fn () void) !*CoWorker {
         const stack = try allocator.alloc(u8, stack_size);
         errdefer allocator.free(stack);
         return initInternal(func, stack, true);
     }
 
+    /// Initializes a new CoWorker using a provided stack.
+    ///
+    /// This is useful when you want to manage the stack allocation yourself. The `stack` slice
+    /// represents the memory to be used as the CoWorker's stack. The `func` is the function that
+    /// the CoWorker will execute.
     pub fn initFromStack(stack: []u8, func: *const fn () void) !*CoWorker {
         return initInternal(func, stack, false);
     }
@@ -115,21 +151,27 @@ const CoWorker = struct {
         @panic("A coworker may never return.");
     }
 
+    /// Deinitializes the CoWorker, freeing the stack if it was allocated by this CoWorker.
     pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
         if (self.owns_stack) {
             allocator.free(self.stack);
         }
     }
 
-    // OPTIM: should we inline this?
+    /// Switches execution to this CoWorker.
+    ///
+    /// This function transfers control from the currently running CoWorker to this CoWorker.
     pub fn switchTo(self: *CoWorker) void {
+        // OPTIM: should we inline this?
         thread_state.switchTo(self);
     }
 
+    /// Returns a pointer to the currently executing CoWorker.
     pub fn current() *CoWorker {
         return thread_state.current();
     }
 
+    /// Returns true if the current execution is within a CoWorker (not the root).
     pub fn inCoWorker() bool {
         return thread_state.inCoWorker();
     }
